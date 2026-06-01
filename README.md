@@ -55,7 +55,9 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-	dart_qjs: ^1.0.0
+	dart_qjs: 
+		git: 
+			url: https://git.nyne.dev/o/dart_qjs.git
 ```
 
 Then fetch dependencies:
@@ -218,14 +220,6 @@ try {
 
 Unhandled promise rejections can also be observed with
 `hostPromiseRejectionHandler`.
-
-## Current status
-
-This repository is an early standalone repackaging of the original idea.
-
-- The public API still uses names such as `FlutterQjs` for compatibility.
-- Build and distribution are centered on Dart native assets.
-- The package includes a small smoke test in `test/dart_qjs_test.dart`.
 
 ## Development
 
