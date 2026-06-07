@@ -55,9 +55,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-	dart_qjs: 
-		git: 
-			url: https://git.nyne.dev/o/dart_qjs.git
+	dart_qjs: ^1.0.0
 ```
 
 Then fetch dependencies:
