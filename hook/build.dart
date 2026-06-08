@@ -26,9 +26,6 @@ Uri _findBuiltLibrary(Uri outputDirectory, String fileName) {
 
 void main(List<String> args) async {
   await build(args, (input, output) async {
-    final sourceDir = Directory(await getPackagePath('dart_qjs')).uri.resolve('src');
-    final sourceDirPath = sourceDir.toFilePath();
-    final quickjsDirPath = '$sourceDirPath${Platform.pathSeparator}quickjs';
     hierarchicalLoggingEnabled = true;
 
     final logger = Logger('dart_qjs')
@@ -36,6 +33,15 @@ void main(List<String> args) async {
       ..onRecord.listen((record) {
         print('${record.level.name}: ${record.time}: ${record.message}');
       });
+
+    if (!input.config.buildCodeAssets) {
+      logger.info('Skipping native build because code assets are not requested for this hook invocation.');
+      return;
+    }
+
+    final sourceDir = Directory(await getPackagePath('dart_qjs')).uri.resolve('src');
+    final sourceDirPath = sourceDir.toFilePath();
+    final quickjsDirPath = '$sourceDirPath${Platform.pathSeparator}quickjs';
 
     try {
       logger.info('Cloning quickjs from $quickjsUrl at version $quickjsVersion');
@@ -60,18 +66,16 @@ void main(List<String> args) async {
       );
 
       await builder.run(input: input, output: output);
-      if (input.config.buildCodeAssets) {
-        final dylibName = input.config.code.targetOS.dylibFileName('flutter_qjs_plugin');
-        final libraryUri = _findBuiltLibrary(input.outputDirectory, dylibName);
-        output.assets.code.add(
-          CodeAsset(
-            package: input.packageName,
-            name: 'flutter_qjs_plugin',
-            linkMode: DynamicLoadingBundled(),
-            file: libraryUri,
-          ),
-        );
-      }
+      final dylibName = input.config.code.targetOS.dylibFileName('flutter_qjs_plugin');
+      final libraryUri = _findBuiltLibrary(input.outputDirectory, dylibName);
+      output.assets.code.add(
+        CodeAsset(
+          package: input.packageName,
+          name: 'flutter_qjs_plugin',
+          linkMode: DynamicLoadingBundled(),
+          file: libraryUri,
+        ),
+      );
       final buildJson = input.config.json;
       logger.info('Build output: $buildJson');
     }
