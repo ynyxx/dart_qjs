@@ -8,13 +8,7 @@ project(quickjs LANGUAGES C CXX)
 include(CheckCCompilerFlag)
 find_package(Threads)
 
-if(ANDROID)
-  set(DART_QJS_OUTPUT_NAME qjs)
-elseif(WIN32 OR LINUX)
-  set(DART_QJS_OUTPUT_NAME flutter_qjs_plugin)
-else()
-  set(DART_QJS_OUTPUT_NAME quickjs)
-endif()
+set(DART_QJS_OUTPUT_NAME flutter_qjs_plugin)
 
 # quickjs
 set(QUICK_JS_LIB_DIR ${CXX_LIB_DIR}/quickjs)
