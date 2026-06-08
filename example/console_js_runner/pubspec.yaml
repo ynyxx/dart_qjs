@@ -1,0 +1,14 @@
+name: console_js_runner
+description: A command-line JavaScript runner for dart_qjs.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  dart_qjs:
+    path: ../..
+
+dev_dependencies:
+  lints: ^6.0.0
