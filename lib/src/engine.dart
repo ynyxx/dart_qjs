@@ -10,6 +10,7 @@ typedef _JsHostPromiseRejectionHandler = void Function(dynamic reason);
 class FlutterQjs {
   Pointer<JSRuntime>? _rt;
   Pointer<JSContext>? _ctx;
+  bool _closed = false;
 
   /// Max stack size for quickjs.
   final int? stackSize;
@@ -20,7 +21,9 @@ class FlutterQjs {
   /// Max memory for quickjs.
   final int? memoryLimit;
 
-  /// Message Port for event loop. Close it to stop dispatching event loop.
+  /// Message Port for event loop.
+  ///
+  /// Calling [close] closes this port automatically and stops [dispatch].
   ReceivePort port = ReceivePort();
 
   /// Handler function to manage js module.
@@ -39,73 +42,78 @@ class FlutterQjs {
 
   _ensureEngine() {
     if (_rt != null) return;
-    final rt = jsNewRuntime((ctx, type, ptr) {
-      try {
-        switch (type) {
-          case JSChannelType.METHON:
-            final pdata = ptr.cast<Pointer<JSValue>>();
-            final argc = (pdata + 1).value.cast<Int32>().value;
-            final pargs = [];
-            for (var i = 0; i < argc; ++i) {
-              pargs.add(_jsToDart(
+    if (_closed) {
+      port = ReceivePort();
+      _closed = false;
+    }
+    final rt = jsNewRuntime(
+      (ctx, type, ptr) {
+        try {
+          switch (type) {
+            case JSChannelType.METHON:
+              final pdata = ptr.cast<Pointer<JSValue>>();
+              final argc = (pdata + 1).value.cast<Int32>().value;
+              final pargs = [];
+              for (var i = 0; i < argc; ++i) {
+                pargs.add(
+                  _jsToDart(
+                    ctx,
+                    Pointer.fromAddress(
+                      (pdata + 2).value.address + sizeOfJSValue * i,
+                    ),
+                  ),
+                );
+              }
+              final JSInvokable func = _jsToDart(ctx, (pdata + 3).value);
+              return _dartToJs(
                 ctx,
-                Pointer.fromAddress(
-                  (pdata + 2).value.address + sizeOfJSValue * i,
-                ),
-              ));
-            }
-            final JSInvokable func = _jsToDart(
-              ctx,
-              (pdata + 3).value,
-            );
-            return _dartToJs(
-                ctx,
-                func.invoke(
-                  pargs,
-                  _jsToDart(ctx, pdata.value),
-                ));
-          case JSChannelType.MODULE:
-            if (moduleHandler == null) throw JSError('No ModuleHandler');
-            final ret = moduleHandler!(
-              ptr.cast<Utf8>().toDartString(),
-            ).toNativeUtf8();
-            Future.microtask(() {
-              malloc.free(ret);
-            });
-            return ret.cast();
-          case JSChannelType.PROMISE_TRACK:
-            final err = _parseJSException(ctx, ptr);
-            if (hostPromiseRejectionHandler != null) {
-              hostPromiseRejectionHandler!(err);
-            } else {
-              print('unhandled promise rejection: $err');
-            }
+                func.invoke(pargs, _jsToDart(ctx, pdata.value)),
+              );
+            case JSChannelType.MODULE:
+              if (moduleHandler == null) throw JSError('No ModuleHandler');
+              final ret = moduleHandler!(
+                ptr.cast<Utf8>().toDartString(),
+              ).toNativeUtf8();
+              Future.microtask(() {
+                malloc.free(ret);
+              });
+              return ret.cast();
+            case JSChannelType.PROMISE_TRACK:
+              final err = _parseJSException(ctx, ptr);
+              if (hostPromiseRejectionHandler != null) {
+                hostPromiseRejectionHandler!(err);
+              } else {
+                print('unhandled promise rejection: $err');
+              }
+              return nullptr;
+            case JSChannelType.FREE_OBJECT:
+              final rt = ctx.cast<JSRuntime>();
+              _DartObject.fromAddress(rt, ptr.address)?.free();
+              return nullptr;
+          }
+          throw JSError('call channel with wrong type');
+        } catch (e) {
+          if (type == JSChannelType.FREE_OBJECT) {
+            print('DartObject release error: $e');
             return nullptr;
-          case JSChannelType.FREE_OBJECT:
-            final rt = ctx.cast<JSRuntime>();
-            _DartObject.fromAddress(rt, ptr.address)?.free();
+          }
+          if (type == JSChannelType.MODULE) {
+            print('host Promise Rejection Handler error: $e');
             return nullptr;
+          }
+          final throwObj = _dartToJs(ctx, e);
+          final err = jsThrow(ctx, throwObj);
+          jsFreeValue(ctx, throwObj);
+          if (type == JSChannelType.MODULE) {
+            jsFreeValue(ctx, err);
+            return nullptr;
+          }
+          return err;
         }
-        throw JSError('call channel with wrong type');
-      } catch (e) {
-        if (type == JSChannelType.FREE_OBJECT) {
-          print('DartObject release error: $e');
-          return nullptr;
-        }
-        if (type == JSChannelType.MODULE) {
-          print('host Promise Rejection Handler error: $e');
-          return nullptr;
-        }
-        final throwObj = _dartToJs(ctx, e);
-        final err = jsThrow(ctx, throwObj);
-        jsFreeValue(ctx, throwObj);
-        if (type == JSChannelType.MODULE) {
-          jsFreeValue(ctx, err);
-          return nullptr;
-        }
-        return err;
-      }
-    }, timeout ?? 0, port);
+      },
+      timeout ?? 0,
+      port,
+    );
     final stackSize = this.stackSize ?? 0;
     if (stackSize > 0) jsSetMaxStackSize(rt, stackSize);
     final memoryLimit = this.memoryLimit ?? 0;
@@ -116,13 +124,15 @@ class FlutterQjs {
 
   /// Free Runtime and Context which can be recreate when evaluate again.
   close() {
+    port.close();
+    _closed = true;
     final rt = _rt;
     final ctx = _ctx;
+    _executePendingJob();
     _rt = null;
     _ctx = null;
     if (ctx != null) jsFreeContext(ctx);
     if (rt == null) return;
-    _executePendingJob();
     try {
       jsFreeRuntime(rt);
     } on String catch (e) {
@@ -151,11 +161,7 @@ class FlutterQjs {
   }
 
   /// Evaluate js script.
-  dynamic evaluate(
-    String command, {
-    String? name,
-    int? evalFlags,
-  }) {
+  dynamic evaluate(String command, {String? name, int? evalFlags}) {
     _ensureEngine();
     final ctx = _ctx!;
     final jsval = jsEval(

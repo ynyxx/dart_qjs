@@ -1,3 +1,9 @@
+## 1.0.3
+
+- Let `FlutterQjs.close()` close the event port automatically.
+- Allow `FlutterQjs` instances to recreate their event port after close.
+- Document Dart callback usage from JavaScript.
+
 ## 1.0.2
 
 - Fix FFI callback binding for runtime creation.

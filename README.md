@@ -110,7 +110,6 @@ engine.dispatch();
 final result = engine.evaluate('1 + 2');
 print(result); // 3
 
-engine.port.close();
 engine.close();
 ```
 
@@ -118,7 +117,7 @@ Notes:
 
 - `evaluate()` is synchronous on the main-thread engine.
 - `dispatch()` processes pending QuickJS jobs from the receive port.
-- Close `port` before shutdown if you started `dispatch()`.
+- `close()` closes the receive port automatically and stops `dispatch()`.
 
 ## Isolate engine
 
@@ -196,6 +195,60 @@ final fn = engine.evaluate('(name) => `hello ${name}`') as JSInvokable;
 print(fn.invoke(['dart']));
 fn.free();
 engine.close();
+```
+
+JavaScript can also call Dart functions. Pass a Dart callback into JavaScript,
+then store it on the JavaScript global object if you want JS code to call it
+later.
+
+```dart
+final engine = FlutterQjs();
+
+try {
+	final setGlobal = engine.evaluate(
+		'(key, value) => { globalThis[key] = value; }',
+	) as JSInvokable;
+
+	setGlobal.invoke([
+		'formatMessage',
+		(String name, int count) {
+			// Replace this with your own Dart implementation.
+			return '$name:$count';
+		},
+	]);
+	setGlobal.free();
+
+	final result = engine.evaluate(r'''
+formatMessage('dart', 3).toUpperCase()
+''');
+
+	print(result); // DART:3
+} finally {
+	engine.close();
+}
+```
+
+For `IsolateQjs`, wrap inline Dart callbacks with `IsolateFunction` before
+passing them to JavaScript.
+
+```dart
+final engine = IsolateQjs();
+
+try {
+	final setGlobal = await engine.evaluate(
+		'(key, value) => { globalThis[key] = value; }',
+	) as JSInvokable;
+
+	await setGlobal.invoke([
+		'add',
+		IsolateFunction((int a, int b) => a + b),
+	]);
+	setGlobal.free();
+
+	print(await engine.evaluate('add(2, 3)')); // 5
+} finally {
+	await engine.close();
+}
 ```
 
 Important:
