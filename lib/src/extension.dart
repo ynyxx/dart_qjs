@@ -555,6 +555,8 @@ const _textEncodingExtensionSource = r'''
     return new Uint8Array(bytes);
   }
 
+  const FROM_CHAR_CODE_CHUNK = 0x8000;
+
   function decodeUtf8(input, fatal = false) {
     const bytes = toUint8Array(input);
     const codeUnits = [];
@@ -628,7 +630,16 @@ const _textEncodingExtensionSource = r'''
       }
     }
 
-    return String.fromCharCode(...codeUnits);
+    if (codeUnits.length <= FROM_CHAR_CODE_CHUNK) {
+      return String.fromCharCode(...codeUnits);
+    }
+
+    let result = '';
+    for (let start = 0; start < codeUnits.length; start += FROM_CHAR_CODE_CHUNK) {
+      const end = Math.min(start + FROM_CHAR_CODE_CHUNK, codeUnits.length);
+      result += String.fromCharCode(...codeUnits.slice(start, end));
+    }
+    return result;
   }
 
   class TextEncoder {

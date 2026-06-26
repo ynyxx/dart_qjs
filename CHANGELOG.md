@@ -1,3 +1,8 @@
+## 1.0.5
+
+- Fix `TextDecoder` UTF-8 decoding for large payloads returned by `fetch`.
+- Add coverage for large JSON response bodies in the `fetch` HTTP test.
+
 ## 1.0.4
 
 - Add browser-compatible `URL`, `TextEncoder/TextDecoder`, `setTimeout`, `setInterval`, `fetch`.

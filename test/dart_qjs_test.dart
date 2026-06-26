@@ -36,6 +36,11 @@ void main() {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
 
+      var largeText = "1";
+      for (int i = 0; i < 20; i++) {
+        largeText = largeText + largeText;
+      }
+
       server.listen((request) async {
         final body = await utf8.decoder.bind(request).join();
         expect(request.method, 'POST');
@@ -45,7 +50,7 @@ void main() {
         request.response.reasonPhrase = 'Created';
         request.response.headers.contentType = ContentType.json;
         request.response.headers.set('x-reply', 'ok');
-        request.response.write('{"received":true}');
+        request.response.write('{"received":"$largeText"}');
         await request.response.close();
       });
 
@@ -72,14 +77,15 @@ fetch('http://${server.address.host}:${server.port}/api', {
 	reply: response.headers.get('x-reply'),
 	data: await response.json(),
 }))
-''') as Future);
+''')
+              as Future);
 
       expect(result, {
         'status': 201,
         'statusText': 'Created',
         'ok': true,
         'reply': 'ok',
-        'data': {'received': true},
+        'data': {'received': largeText},
       });
     });
 
@@ -105,7 +111,8 @@ fetch('http://${server.address.host}:${server.port}/api', {
 fetch('http://${server.address.host}:${server.port}/bytes')
 	.then((response) => response.arrayBuffer())
 	.then((buffer) => Array.from(new Uint8Array(buffer)))
-''') as Future);
+''')
+              as Future);
 
       expect(result, [1, 2, 3, 4]);
     });
