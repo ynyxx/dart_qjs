@@ -106,6 +106,13 @@ void _runJsIsolate(Map spawnMessage) async {
     stackSize: spawnMessage[#stackSize],
     timeout: spawnMessage[#timeout],
     memoryLimit: spawnMessage[#memoryLimit],
+    consoleHandler: (level, values) {
+      sendPort.send({
+        #type: #console,
+        #level: level,
+        #values: _encodeData(values),
+      });
+    },
     hostPromiseRejectionHandler: (reason) {
       sendPort.send({
         #type: #hostPromiseRejection,
@@ -172,6 +179,9 @@ class IsolateQjs {
   /// Handler function to manage js module.
   final _JsHostPromiseRejectionHandler? hostPromiseRejectionHandler;
 
+  /// Handler function to receive JavaScript console output.
+  final JsConsoleHandler? consoleHandler;
+
   /// Quickjs engine runing on isolate thread.
   ///
   /// Pass handlers to implement js-dart interaction and resolving modules. The `methodHandler` is
@@ -182,6 +192,7 @@ class IsolateQjs {
     this.timeout,
     this.memoryLimit,
     this.hostPromiseRejectionHandler,
+    this.consoleHandler,
   });
 
   _ensureEngine() {
@@ -211,6 +222,28 @@ class IsolateQjs {
               }
             } catch (e) {
               print('host Promise Rejection Handler error: $e');
+            }
+            break;
+          case #console:
+            try {
+              final level = msg[#level] as String;
+              final values = (_decodeData(msg[#values]) as List)
+                  .cast<dynamic>();
+              final handler = consoleHandler;
+              if (handler != null) {
+                handler(level, values);
+              } else {
+                final text = values
+                    .map((value) => value?.toString() ?? 'null')
+                    .join(' ');
+                if (level == 'log') {
+                  print(text);
+                } else {
+                  print('[$level] $text');
+                }
+              }
+            } catch (e) {
+              print('console handler error: $e');
             }
             break;
           case #module:

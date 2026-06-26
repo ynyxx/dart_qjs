@@ -255,6 +255,13 @@ external Pointer<JSValue> jsNewCFunction(
   Pointer<JSValue> funcData,
 );
 
+/// JSValue *jsGetGlobalObject(JSContext *ctx)
+@Native<Pointer<JSValue> Function(Pointer<JSContext>)>(
+  assetId: _qjsAssetId,
+  symbol: 'jsGetGlobalObject',
+)
+external Pointer<JSValue> jsGetGlobalObject(Pointer<JSContext> ctx);
+
 /// JSContext *jsNewContext(JSRuntime *rt)
 @Native<Pointer<JSContext> Function(Pointer<JSRuntime>)>(
   assetId: _qjsAssetId,

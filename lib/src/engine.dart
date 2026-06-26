@@ -6,11 +6,15 @@ typedef _JsModuleHandler = String Function(String name);
 /// Handler to manage unhandled promise rejection.
 typedef _JsHostPromiseRejectionHandler = void Function(dynamic reason);
 
+/// Handler to receive console output from JavaScript.
+typedef JsConsoleHandler = void Function(String level, List<dynamic> values);
+
 /// Quickjs engine for flutter.
 class FlutterQjs {
   Pointer<JSRuntime>? _rt;
   Pointer<JSContext>? _ctx;
   bool _closed = false;
+  final HttpClient _httpClient = HttpClient();
 
   /// Max stack size for quickjs.
   final int? stackSize;
@@ -32,12 +36,19 @@ class FlutterQjs {
   /// Handler function to manage js module.
   final _JsHostPromiseRejectionHandler? hostPromiseRejectionHandler;
 
+  /// Handler function to receive JavaScript console output.
+  final JsConsoleHandler? consoleHandler;
+
+  final Map<int, _QjsTimerEntry> _timers = HashMap();
+  int _nextTimerId = 1;
+
   FlutterQjs({
     this.moduleHandler,
     this.stackSize,
     this.timeout,
     this.memoryLimit,
     this.hostPromiseRejectionHandler,
+    this.consoleHandler,
   });
 
   _ensureEngine() {
@@ -120,6 +131,7 @@ class FlutterQjs {
     if (memoryLimit > 0) jsSetMemoryLimit(rt, memoryLimit);
     _rt = rt;
     _ctx = jsNewContext(rt);
+    _installExtensions(_ctx!, this);
   }
 
   /// Free Runtime and Context which can be recreate when evaluate again.
@@ -128,7 +140,9 @@ class FlutterQjs {
     _closed = true;
     final rt = _rt;
     final ctx = _ctx;
+    _clearAllTimers();
     _executePendingJob();
+    _httpClient.close(force: true);
     _rt = null;
     _ctx = null;
     if (ctx != null) jsFreeContext(ctx);
@@ -178,4 +192,139 @@ class FlutterQjs {
     jsFreeValue(ctx, jsval);
     return result;
   }
+
+  int _setTimer(
+    JSInvokable callback,
+    int delayMs,
+    List<dynamic> args,
+    bool repeat,
+  ) {
+    final timerId = _nextTimerId++;
+    JSRef.dupRecursive(callback);
+    JSRef.dupRecursive(args);
+    final duration = Duration(milliseconds: delayMs < 0 ? 0 : delayMs);
+
+    void onFire() {
+      final entry = _timers[timerId];
+      if (entry == null) return;
+      try {
+        entry.callback.invoke(entry.args);
+      } catch (error) {
+        print('timer callback error: $error');
+      } finally {
+        if (!entry.repeat) _disposeTimer(timerId);
+      }
+    }
+
+    final timer = repeat
+        ? Timer.periodic(duration, (_) => onFire())
+        : Timer(duration, onFire);
+    _timers[timerId] = _QjsTimerEntry(
+      callback: callback,
+      args: args,
+      timer: timer,
+      repeat: repeat,
+    );
+    return timerId;
+  }
+
+  void _clearTimer(int timerId) {
+    _disposeTimer(timerId);
+  }
+
+  void _emitConsole(String level, List<dynamic> values) {
+    final handler = consoleHandler;
+    if (handler != null) {
+      handler(level, values);
+      return;
+    }
+    final text = values.map((value) => value?.toString() ?? 'null').join(' ');
+    if (level == 'log') {
+      print(text);
+      return;
+    }
+    print('[$level] $text');
+  }
+
+  Future<Map<String, dynamic>> _fetch(Map<dynamic, dynamic> request) async {
+    final urlValue = request['url'];
+    if (urlValue == null) {
+      throw JSError('fetch requires a request url');
+    }
+
+    final uri = Uri.parse(urlValue.toString());
+    final method = (request['method']?.toString() ?? 'GET').toUpperCase();
+    final headers = <String, String>{};
+    final headerEntries = request['headers'];
+    if (headerEntries is Map) {
+      for (final entry in headerEntries.entries) {
+        headers[entry.key.toString()] = entry.value.toString();
+      }
+    }
+
+    final httpRequest = await _httpClient.openUrl(method, uri);
+    headers.forEach(httpRequest.headers.set);
+
+    final body = request['body'];
+    if (body is Uint8List) {
+      httpRequest.add(body);
+    } else if (body is List<int>) {
+      httpRequest.add(Uint8List.fromList(body));
+    } else if (body is String) {
+      httpRequest.add(utf8.encode(body));
+    } else if (body != null) {
+      throw JSError('Unsupported fetch body type: ${body.runtimeType}');
+    }
+
+    final response = await httpRequest.close();
+    final responseBytes = await response.fold<BytesBuilder>(
+      BytesBuilder(copy: false),
+      (builder, chunk) {
+        builder.add(chunk);
+        return builder;
+      },
+    ).then((builder) => builder.takeBytes());
+    final responseHeaders = <String, String>{};
+    response.headers.forEach((name, values) {
+      responseHeaders[name] = values.join(', ');
+    });
+
+    return {
+      'status': response.statusCode,
+      'statusText': response.reasonPhrase,
+      'ok': response.statusCode >= 200 && response.statusCode < 300,
+      'url': uri.toString(),
+      'headers': responseHeaders,
+      'body': responseBytes,
+    };
+  }
+
+  void _disposeTimer(int timerId) {
+    final entry = _timers.remove(timerId);
+    if (entry == null) return;
+    entry.timer.cancel();
+    JSRef.freeRecursive(entry.callback);
+    JSRef.freeRecursive(entry.args);
+  }
+
+  void _clearAllTimers() {
+    final timerIds = _timers.keys.toList(growable: false);
+    for (final timerId in timerIds) {
+      _disposeTimer(timerId);
+    }
+  }
+}
+
+class _QjsTimerEntry {
+  final JSInvokable callback;
+  final List<dynamic> args;
+  final Timer timer;
+  final bool repeat;
+
+  _QjsTimerEntry({
+    required this.callback,
+    required this.args,
+    required this.timer,
+    required this.repeat,
+  });
 }

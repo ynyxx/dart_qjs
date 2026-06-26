@@ -1,3 +1,9 @@
+## 1.0.4
+
+- Add browser-compatible `URL`, `TextEncoder/TextDecoder`, `setTimeout`, `setInterval`, `fetch`.
+- Add tests covering HTTP requests, response headers, and binary response
+  bodies for the new `fetch` API.
+
 ## 1.0.3
 
 - Let `FlutterQjs.close()` close the event port automatically.

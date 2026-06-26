@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
@@ -8,6 +10,7 @@ import 'src/ffi.dart';
 export 'src/ffi.dart' show JSEvalFlag, JSRef;
 
 part 'src/engine.dart';
+part 'src/extension.dart';
 part 'src/isolate.dart';
 part 'src/wrapper.dart';
 part 'src/object.dart';

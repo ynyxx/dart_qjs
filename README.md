@@ -119,6 +119,38 @@ Notes:
 - `dispatch()` processes pending QuickJS jobs from the receive port.
 - `close()` closes the receive port automatically and stops `dispatch()`.
 
+## JavaScript extensions
+
+The package currently adds these browser-compatible globals:
+
+- `URL`
+- `URLSearchParams`
+- `TextEncoder`
+- `TextDecoder`
+- `fetch`
+- `Headers`
+- `Request`
+- `Response`
+- `setTimeout`
+- `setInterval`
+- `clearTimeout`
+- `clearInterval`
+- `console`
+
+`fetch` is implemented with Dart standard library networking (`dart:io`
+`HttpClient`), so it works in Dart and Flutter desktop/server environments that
+allow socket access.
+
+`console` output can be redirected with `consoleHandler`:
+
+```dart
+final engine = FlutterQjs(
+	consoleHandler: (level, values) {
+		stderr.writeln('[$level] ${values.join(' ')}');
+	},
+);
+```
+
 ## Isolate engine
 
 If you want asynchronous evaluation or async module loading, use `IsolateQjs`.

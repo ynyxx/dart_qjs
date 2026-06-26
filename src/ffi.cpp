@@ -158,6 +158,11 @@ extern "C"
     return new JSValue(JS_NewCFunctionData(ctx, js_channel, 0, 0, 1, funcData));
   }
 
+  DLLEXPORT JSValue *jsGetGlobalObject(JSContext *ctx)
+  {
+    return new JSValue(JS_GetGlobalObject(ctx));
+  }
+
   DLLEXPORT JSContext *jsNewContext(JSRuntime *rt)
   {
     JS_UpdateStackTop(rt);
