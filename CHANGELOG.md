@@ -1,3 +1,11 @@
+## 1.0.6
+
+- Make `evaluate` generic for typed return values.
+- Auto-close JavaScript functions when they are no longer needed.
+- Add `setGlobal` support.
+- Improve documentation.
+- Fix forced isolate shutdown handling.
+
 ## 1.0.5
 
 - Fix `TextDecoder` UTF-8 decoding for large payloads returned by `fetch`.

@@ -55,7 +55,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-	dart_qjs: ^1.0.0
+	dart_qjs: ^1.0.6
 ```
 
 Then fetch dependencies:
