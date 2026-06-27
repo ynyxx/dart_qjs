@@ -164,6 +164,8 @@ typedef _JsAsyncModuleHandler = Future<String> Function(String name);
 class IsolateQjs {
   Future<SendPort>? _sendPort;
 
+  Isolate? _isolate;
+
   /// Max stack size for quickjs.
   final int? stackSize;
 
@@ -195,10 +197,10 @@ class IsolateQjs {
     this.consoleHandler,
   });
 
-  _ensureEngine() {
+  Future<void> _ensureEngine() async {
     if (_sendPort != null) return;
     ReceivePort port = ReceivePort();
-    Isolate.spawn(_runJsIsolate, {
+    _isolate = await Isolate.spawn(_runJsIsolate, {
       #port: port.sendPort,
       #stackSize: stackSize,
       #timeout: timeout,
@@ -258,28 +260,28 @@ class IsolateQjs {
       },
       onDone: () {
         close();
-        if (!completer.isCompleted)
+        if (!completer.isCompleted) {
           completer.completeError(JSError('isolate close'));
+        }
       },
     );
     _sendPort = completer.future;
   }
 
   /// Free Runtime and close isolate thread that can be recreate when evaluate again.
-  close() {
-    final sendPort = _sendPort;
+  Future<dynamic> close() async {
+    final sendPort = await _sendPort;
     _sendPort = null;
     if (sendPort == null) return;
-    final ret = sendPort.then((sendPort) async {
-      final closePort = ReceivePort();
-      sendPort.send({#type: #close, #port: closePort.sendPort});
-      final result = await closePort.first;
-      closePort.close();
-      if (result is Map && result.containsKey(#error))
-        throw _decodeData(result[#error]);
-      return _decodeData(result);
-    });
-    return ret;
+    final closePort = ReceivePort();
+    sendPort.send({#type: #close, #port: closePort.sendPort});
+    final result = await closePort.first;
+    closePort.close();
+    _isolate?.kill();
+    if (result is Map && result.containsKey("error")) {
+      throw _decodeData(result["error"]);
+    }
+    return _decodeData(result);
   }
 
   /// Evaluate js script.
@@ -288,7 +290,7 @@ class IsolateQjs {
     String? name,
     int? evalFlags,
   }) async {
-    _ensureEngine();
+    await _ensureEngine();
     final evaluatePort = ReceivePort();
     final sendPort = await _sendPort!;
     sendPort.send({
@@ -300,8 +302,9 @@ class IsolateQjs {
     });
     final result = await evaluatePort.first;
     evaluatePort.close();
-    if (result is Map && result.containsKey(#error))
+    if (result is Map && result.containsKey(#error)) {
       throw _decodeData(result[#error]);
+    }
     return _decodeData(result);
   }
 }
