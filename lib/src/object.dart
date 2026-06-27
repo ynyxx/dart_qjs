@@ -115,13 +115,20 @@ class JSError extends _IsolateEncodable {
 class _JSObject extends JSRef {
   Pointer<JSValue>? _val;
   Pointer<JSContext>? _ctx;
+  final bool _trackedByRuntime;
 
   /// Create
-  _JSObject(Pointer<JSContext> ctx, Pointer<JSValue> val) {
-    this._ctx = ctx;
+  _JSObject(
+    Pointer<JSContext> ctx,
+    Pointer<JSValue> val, {
+    bool trackedByRuntime = true,
+  }) : _trackedByRuntime = trackedByRuntime {
+    _ctx = ctx;
     final rt = jsGetRuntime(ctx);
-    this._val = jsDupValue(ctx, val);
-    runtimeOpaques[rt]?.addRef(this);
+    _val = jsDupValue(ctx, val);
+    if (_trackedByRuntime) {
+      runtimeOpaques[rt]?.addRef(this);
+    }
   }
 
   @override
@@ -132,7 +139,9 @@ class _JSObject extends JSRef {
     _ctx = null;
     if (ctx == null || val == null) return;
     final rt = jsGetRuntime(ctx);
-    runtimeOpaques[rt]?.removeRef(this);
+    if (_trackedByRuntime) {
+      runtimeOpaques[rt]?.removeRef(this);
+    }
     jsFreeValue(ctx, val);
   }
 
@@ -143,9 +152,36 @@ class _JSObject extends JSRef {
   }
 }
 
+final Finalizer<JSFunctionFinalizerToken> _jsFunctionFinalizer =
+    Finalizer<JSFunctionFinalizerToken>((token) {
+      token.release();
+    });
+
 /// JS function wrapper
-class _JSFunction extends _JSObject implements JSInvokable, _IsolateEncodable {
-  _JSFunction(Pointer<JSContext> ctx, Pointer<JSValue> val) : super(ctx, val);
+class _JSFunction extends _JSObject
+    implements JSInvokable, _IsolateEncodable, JSFunctionOwner {
+  late final JSFunctionFinalizerToken _finalizerToken;
+
+  _JSFunction(Pointer<JSContext> ctx, Pointer<JSValue> val)
+    : super(ctx, val, trackedByRuntime: false) {
+    _finalizerToken = JSFunctionFinalizerToken(jsGetRuntime(ctx), _val);
+    _finalizerToken.setOwner(this);
+    runtimeOpaques[jsGetRuntime(ctx)]?.addFunctionToken(_finalizerToken);
+    _jsFunctionFinalizer.attach(this, _finalizerToken, detach: this);
+  }
+
+  @override
+  void markReleased() {
+    _val = null;
+    _ctx = null;
+  }
+
+  @override
+  void destroy() {
+    _jsFunctionFinalizer.detach(this);
+    _finalizerToken.detach();
+    super.destroy();
+  }
 
   @override
   invoke(List<dynamic> arguments, [dynamic thisVal]) {
@@ -281,19 +317,27 @@ class IsolateFunction extends JSInvokable implements _IsolateEncodable {
   }
 
   int _refCount = 0;
+  bool _released = false;
 
   @override
   dup() {
+    if (_released) return;
     _send(#dup);
+    _refCount++;
   }
 
   @override
   free() {
+    if (_released) return;
+    _refCount--;
+    if (_refCount < 0) _released = true;
     _send(#free);
   }
 
   @override
   void destroy() {
+    if (_released) return;
+    _released = true;
     _send(#destroy);
   }
 }

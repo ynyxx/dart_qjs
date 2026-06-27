@@ -240,6 +240,35 @@ console.assert(false, 'failed');
       ]);
     });
 
+    test('freeing the same js function multiple times is safe', () {
+      final qjs = FlutterQjs();
+      addTearDown(qjs.close);
+
+      final fn = qjs.evaluate('(value) => value + 1') as JSInvokable;
+      expect(fn.invoke([1]), 2);
+
+      fn.free();
+      fn.free();
+    });
+
+    test('close releases js functions without manual free', () {
+      final qjs = FlutterQjs();
+
+      qjs.evaluate('(value) => value + 1') as JSInvokable;
+
+      expect(qjs.close, returnsNormally);
+    });
+
+    test('invoking a js function after close throws', () {
+      final qjs = FlutterQjs();
+
+      final fn = qjs.evaluate('(value) => value + 1') as JSInvokable;
+      qjs.close();
+
+      expect(() => fn.invoke([1]), throwsA(isA<JSError>()));
+      fn.free();
+    });
+
     test('keeps URL.search and searchParams in sync', () {
       final qjs = FlutterQjs();
       addTearDown(qjs.close);

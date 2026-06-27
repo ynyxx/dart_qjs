@@ -282,6 +282,7 @@ class IsolateQjs {
     final result = await closePort.first;
     closePort.close();
     _isolate?.kill();
+    _isolate = null;
     if (result is Map && result.containsKey("error")) {
       throw _decodeData(result["error"]);
     }

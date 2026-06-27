@@ -14,13 +14,20 @@ extension ListFirstWhere<T> on Iterable<T> {
 
 abstract class JSRef {
   int _refCount = 0;
+  bool _destroyed = false;
+
   void dup() {
+    if (_destroyed) return;
     _refCount++;
   }
 
   void free() {
+    if (_destroyed) return;
     _refCount--;
-    if (_refCount < 0) destroy();
+    if (_refCount < 0) {
+      _destroyed = true;
+      destroy();
+    }
   }
 
   void destroy();
@@ -105,6 +112,61 @@ abstract base class JSRuntime extends Opaque {}
 
 abstract base class JSPropertyEnum extends Opaque {}
 
+class JSFunctionFinalizerToken {
+  Pointer<JSRuntime>? _rt;
+  Pointer<JSValue>? _val;
+  Object? _owner;
+  bool _released = false;
+
+  JSFunctionFinalizerToken(this._rt, this._val);
+
+  void setOwner(Object owner) {
+    _owner = WeakReference(owner);
+  }
+
+  void detach() {
+    if (_released) return;
+    _released = true;
+    final rt = _rt;
+    _rt = null;
+    _val = null;
+    _owner = null;
+    if (rt != null) {
+      runtimeOpaques[rt]?.removeFunctionToken(this);
+    }
+  }
+
+  void release() {
+    _release(null);
+  }
+
+  void releaseForRuntime(void Function(Object owner)? markOwnerReleased) {
+    _release(markOwnerReleased);
+  }
+
+  void _release(void Function(Object owner)? markOwnerReleased) {
+    if (_released) return;
+    _released = true;
+    final rt = _rt;
+    final val = _val;
+    final owner = (_owner as WeakReference?)?.target;
+    _rt = null;
+    _val = null;
+    _owner = null;
+    if (owner != null) {
+      markOwnerReleased?.call(owner);
+    }
+    if (rt == null || val == null) return;
+    runtimeOpaques[rt]?.removeFunctionToken(this);
+    if (!runtimeOpaques.containsKey(rt)) return;
+    jsFreeValueRT(rt, val);
+  }
+}
+
+abstract class JSFunctionOwner {
+  void markReleased();
+}
+
 const _qjsAssetId = 'package:dart_qjs/flutter_qjs_plugin';
 
 /// DLLEXPORT JSValue *jsThrow(JSContext *ctx, JSValue *obj)
@@ -153,6 +215,7 @@ external Pointer<JSRuntime> _jsNewRuntime(
 class _RuntimeOpaque {
   final _JSChannel _channel;
   List<JSRef> _ref = [];
+  final Set<JSFunctionFinalizerToken> _functionTokens = {};
   final ReceivePort _port;
   int? _dartObjectClassId;
   _RuntimeOpaque(this._channel, this._port);
@@ -162,6 +225,14 @@ class _RuntimeOpaque {
   void addRef(JSRef ref) => _ref.add(ref);
 
   bool removeRef(JSRef ref) => _ref.remove(ref);
+
+  void addFunctionToken(JSFunctionFinalizerToken token) {
+    _functionTokens.add(token);
+  }
+
+  void removeFunctionToken(JSFunctionFinalizerToken token) {
+    _functionTokens.remove(token);
+  }
 
   JSRef? getRef(bool Function(JSRef ref) test) {
     return _ref.firstWhereOrNull(test);
@@ -222,6 +293,12 @@ void jsFreeRuntime(Pointer<JSRuntime> rt) {
   final referenceleak = <String>[];
   final opaque = runtimeOpaques[rt];
   if (opaque != null) {
+    for (final token in opaque._functionTokens.toList(growable: false)) {
+      token.releaseForRuntime((owner) {
+        if (owner is JSFunctionOwner) owner.markReleased();
+      });
+    }
+    opaque._functionTokens.clear();
     while (true) {
       final ref = opaque._ref.firstWhereOrNull((ref) => ref is JSRefLeakable);
       if (ref == null) break;
@@ -238,6 +315,7 @@ void jsFreeRuntime(Pointer<JSRuntime> rt) {
       ref.destroy();
     }
   }
+  runtimeOpaques.remove(rt);
   _jsFreeRuntime(rt);
   if (referenceleak.length > 0) {
     throw ('reference leak:\n    ADDR\tREF\tTYPE\tPROP\n' +

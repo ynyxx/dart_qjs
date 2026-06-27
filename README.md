@@ -223,6 +223,9 @@ The library converts common Dart values to JavaScript values and back.
 | other objects | wrapped as `DartObject` |
 
 JavaScript functions returned into Dart implement `JSInvokable`.
+They are automatically released by Dart finalizers when no longer referenced,
+but calling `free()` is still supported and is the preferred way to release
+them promptly.
 
 ```dart
 final engine = FlutterQjs();
@@ -302,7 +305,10 @@ try {
 Important:
 
 - Objects implementing `JSRef` should be released when you keep them around.
-- Use `free()` or `JSRef.freeRecursive(...)` to release JS-backed references.
+- JavaScript functions support automatic release through Dart finalizers.
+- Use `free()` or `JSRef.freeRecursive(...)` when you want deterministic,
+  prompt release of JS-backed references.
+- Calling `free()` multiple times on the same JavaScript function is safe.
 - Use `dup()` if you need to retain a reference past an invocation boundary.
 
 ## Error handling
