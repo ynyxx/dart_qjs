@@ -108,11 +108,11 @@ final engine = FlutterQjs(
 
 engine.dispatch();
 
-final result = engine.evaluate('1 + 2');
+final result = engine.evaluate<int>('1 + 2');
 print(result); // 3
 
 engine.setGlobal('hostAdd', (int a, int b) => a + b);
-print(engine.evaluate('hostAdd(2, 3)')); // 5
+print(engine.evaluate<int>('hostAdd(2, 3)')); // 5
 
 engine.close();
 ```
@@ -169,7 +169,7 @@ final engine = IsolateQjs(
 	},
 );
 
-final result = await engine.evaluate(r'''
+final result = await engine.evaluate<String>(r'''
 import('hello').then(({ default: greet }) => greet('world'))
 ''');
 
@@ -197,7 +197,7 @@ final engine = FlutterQjs(
 	},
 );
 
-final add = engine.evaluate(r'''
+final add = engine.evaluate<Future>(r'''
 import('math').then(({ add }) => add(2, 3))
 ''');
 ```
@@ -229,7 +229,7 @@ them promptly.
 
 ```dart
 final engine = FlutterQjs();
-final fn = engine.evaluate('(name) => `hello ${name}`') as JSInvokable;
+final fn = engine.evaluate<JSInvokable>('(name) => `hello ${name}`');
 
 print(fn.invoke(['dart']));
 fn.free();
@@ -286,9 +286,9 @@ passing them to JavaScript.
 final engine = IsolateQjs();
 
 try {
-	final setGlobal = await engine.evaluate(
+	final setGlobal = await engine.evaluate<JSInvokable>(
 		'(key, value) => { globalThis[key] = value; }',
-	) as JSInvokable;
+	);
 
 	await setGlobal.invoke([
 		'add',
@@ -296,7 +296,7 @@ try {
 	]);
 	setGlobal.free();
 
-	print(await engine.evaluate('add(2, 3)')); // 5
+	print(await engine.evaluate<int>('add(2, 3)')); // 5
 } finally {
 	await engine.close();
 }

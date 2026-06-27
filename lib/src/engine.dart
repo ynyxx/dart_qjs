@@ -175,7 +175,7 @@ class FlutterQjs {
   }
 
   /// Evaluate js script.
-  dynamic evaluate(String command, {String? name, int? evalFlags}) {
+  T evaluate<T>(String command, {String? name, int? evalFlags}) {
     _ensureEngine();
     final ctx = _ctx!;
     final jsval = jsEval(
@@ -190,7 +190,7 @@ class FlutterQjs {
     }
     final result = _jsToDart(ctx, jsval);
     jsFreeValue(ctx, jsval);
-    return result;
+    return result as T;
   }
 
   /// Set a property on `globalThis`.

@@ -290,11 +290,7 @@ class IsolateQjs {
   }
 
   /// Evaluate js script.
-  Future<dynamic> evaluate(
-    String command, {
-    String? name,
-    int? evalFlags,
-  }) async {
+  Future<T> evaluate<T>(String command, {String? name, int? evalFlags}) async {
     await _ensureEngine();
     final evaluatePort = ReceivePort();
     final sendPort = await _sendPort!;
@@ -310,7 +306,7 @@ class IsolateQjs {
     if (result is Map && result.containsKey(#error)) {
       throw _decodeData(result[#error]);
     }
-    return _decodeData(result);
+    return _decodeData(result) as T;
   }
 
   /// Set a property on `globalThis`.

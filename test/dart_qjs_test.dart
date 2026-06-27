@@ -244,7 +244,7 @@ console.assert(false, 'failed');
       final qjs = FlutterQjs();
       addTearDown(qjs.close);
 
-      final fn = qjs.evaluate('(value) => value + 1') as JSInvokable;
+      final fn = qjs.evaluate<JSInvokable>('(value) => value + 1');
       expect(fn.invoke([1]), 2);
 
       fn.free();
@@ -254,7 +254,7 @@ console.assert(false, 'failed');
     test('close releases js functions without manual free', () {
       final qjs = FlutterQjs();
 
-      qjs.evaluate('(value) => value + 1') as JSInvokable;
+      qjs.evaluate<JSInvokable>('(value) => value + 1');
 
       expect(qjs.close, returnsNormally);
     });
@@ -262,7 +262,7 @@ console.assert(false, 'failed');
     test('invoking a js function after close throws', () {
       final qjs = FlutterQjs();
 
-      final fn = qjs.evaluate('(value) => value + 1') as JSInvokable;
+      final fn = qjs.evaluate<JSInvokable>('(value) => value + 1');
       qjs.close();
 
       expect(() => fn.invoke([1]), throwsA(isA<JSError>()));
@@ -346,7 +346,7 @@ console.assert(false, 'failed');
       final qjs = FlutterQjs();
       addTearDown(qjs.close);
 
-      final fn = qjs.evaluate(r'(name) => `hello ${name}`') as JSInvokable;
+      final fn = qjs.evaluate<JSInvokable>(r'(name) => `hello ${name}`');
       addTearDown(fn.free);
 
       expect(fn.invoke(['copilot']), 'hello copilot');
@@ -356,8 +356,9 @@ console.assert(false, 'failed');
       final qjs = FlutterQjs();
       addTearDown(qjs.close);
 
-      final fn =
-          qjs.evaluate('(callback) => callback("copilot", 3)') as JSInvokable;
+      final fn = qjs.evaluate<JSInvokable>(
+        '(callback) => callback("copilot", 3)',
+      );
       addTearDown(fn.free);
 
       final result = fn.invoke([(String name, int count) => '$name:$count']);
