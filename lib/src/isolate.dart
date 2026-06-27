@@ -144,6 +144,10 @@ void _runJsIsolate(Map spawnMessage) async {
             evalFlags: msg[#flag],
           );
           break;
+        case #setGlobal:
+          qjs.setGlobal(msg[#symbolName], _decodeData(msg[#value]));
+          data = null;
+          break;
         case #close:
           data = false;
           qjs.close();
@@ -306,5 +310,23 @@ class IsolateQjs {
       throw _decodeData(result[#error]);
     }
     return _decodeData(result);
+  }
+
+  /// Set a property on `globalThis`.
+  Future<void> setGlobal(String symbolName, dynamic value) async {
+    await _ensureEngine();
+    final port = ReceivePort();
+    final sendPort = await _sendPort!;
+    sendPort.send({
+      #type: #setGlobal,
+      #symbolName: symbolName,
+      #value: _encodeData(value),
+      #port: port.sendPort,
+    });
+    final result = await port.first;
+    port.close();
+    if (result is Map && result.containsKey(#error)) {
+      throw _decodeData(result[#error]);
+    }
   }
 }

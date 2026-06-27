@@ -111,6 +111,9 @@ engine.dispatch();
 final result = engine.evaluate('1 + 2');
 print(result); // 3
 
+engine.setGlobal('hostAdd', (int a, int b) => a + b);
+print(engine.evaluate('hostAdd(2, 3)')); // 5
+
 engine.close();
 ```
 
@@ -238,24 +241,36 @@ later.
 final engine = FlutterQjs();
 
 try {
-	final setGlobal = engine.evaluate(
-		'(key, value) => { globalThis[key] = value; }',
-	) as JSInvokable;
-
-	setGlobal.invoke([
+	engine.setGlobal(
 		'formatMessage',
 		(String name, int count) {
 			// Replace this with your own Dart implementation.
 			return '$name:$count';
 		},
-	]);
-	setGlobal.free();
+	);
 
 	final result = engine.evaluate(r'''
 formatMessage('dart', 3).toUpperCase()
 ''');
 
 	print(result); // DART:3
+} finally {
+	engine.close();
+}
+```
+
+You can also expose plain Dart values directly:
+
+```dart
+final engine = FlutterQjs();
+
+try {
+	engine.setGlobal('config', {
+		'baseUrl': 'https://example.com',
+		'retries': 3,
+	});
+
+	print(engine.evaluate('config.baseUrl'));
 } finally {
 	engine.close();
 }

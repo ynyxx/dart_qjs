@@ -193,6 +193,18 @@ class FlutterQjs {
     return result;
   }
 
+  /// Set a property on `globalThis`.
+  void setGlobal(String symbolName, dynamic value) {
+    _ensureEngine();
+    final ctx = _ctx!;
+    final global = jsGetGlobalObject(ctx);
+    try {
+      _definePropertyValue(ctx, global, symbolName, value);
+    } finally {
+      jsFreeValue(ctx, global);
+    }
+  }
+
   int _setTimer(
     JSInvokable callback,
     int delayMs,
@@ -277,13 +289,12 @@ class FlutterQjs {
     }
 
     final response = await httpRequest.close();
-    final responseBytes = await response.fold<BytesBuilder>(
-      BytesBuilder(copy: false),
-      (builder, chunk) {
-        builder.add(chunk);
-        return builder;
-      },
-    ).then((builder) => builder.takeBytes());
+    final responseBytes = await response
+        .fold<BytesBuilder>(BytesBuilder(copy: false), (builder, chunk) {
+          builder.add(chunk);
+          return builder;
+        })
+        .then((builder) => builder.takeBytes());
     final responseHeaders = <String, String>{};
     response.headers.forEach((name, values) {
       responseHeaders[name] = values.join(', ');

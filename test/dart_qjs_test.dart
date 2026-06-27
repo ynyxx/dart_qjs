@@ -336,6 +336,33 @@ console.assert(false, 'failed');
       expect(result, 'copilot:3');
     });
 
+    test('setGlobal exposes Dart values and callbacks on globalThis', () {
+      final qjs = FlutterQjs();
+      addTearDown(qjs.close);
+
+      qjs.setGlobal('hostValue', {
+        'name': 'dart',
+        'list': [1, 2, 3],
+      });
+      qjs.setGlobal('hostCallback', (String prefix, int value) {
+        return '$prefix:$value';
+      });
+
+      final result = qjs.evaluate(r'''
+(() => ({
+	name: globalThis.hostValue.name,
+	list: globalThis.hostValue.list,
+	callbackResult: globalThis.hostCallback('item', 9),
+}))()
+''');
+
+      expect(result, {
+        'name': 'dart',
+        'list': [1, 2, 3],
+        'callbackResult': 'item:9',
+      });
+    });
+
     test(
       'close stops dispatch and recreates the event port on reuse',
       () async {
@@ -455,5 +482,21 @@ console.warn('from isolate', 9);
         );
       },
     );
+
+    test('setGlobal exposes values on isolate globalThis', () async {
+      final qjs = IsolateQjs();
+      addTearDown(qjs.close);
+
+      await qjs.setGlobal('hostValue', {'answer': 42, 'enabled': true});
+
+      final result = await qjs.evaluate(r'''
+(() => ({
+	answer: globalThis.hostValue.answer,
+	enabled: globalThis.hostValue.enabled,
+}))()
+''');
+
+      expect(result, {'answer': 42, 'enabled': true});
+    });
   });
 }
