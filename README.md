@@ -77,6 +77,7 @@ import 'package:dart_qjs/dart_qjs.dart';
 
 void main() {
 	final engine = FlutterQjs();
+	engine.dispatch();
 
 	try {
 		final result = engine.evaluate(r'''
