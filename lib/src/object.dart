@@ -292,7 +292,7 @@ class IsolateFunction extends JSInvokable implements _IsolateEncodable {
     }
     final List args = _decodeData(msg[#args]);
     final thisVal = _decodeData(msg[#thisVal]);
-    return _invokable?.invoke(args, thisVal);
+    return await _invokable?.invoke(args, thisVal);
   }
 
   @override

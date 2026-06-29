@@ -181,7 +181,11 @@ Notes:
 
 - `evaluate()` returns a `Future` on `IsolateQjs`.
 - `moduleHandler` can be asynchronous.
-- Functions used across isolate boundaries should be top-level or static.
+- Top-level functions and static methods can cross isolate boundaries directly.
+- Passing a top-level function or static method directly keeps JavaScript calls
+  synchronous.
+- Wrapping a callback with `IsolateFunction` makes JavaScript calls
+  asynchronous, so call them with `await` in JavaScript.
 
 ## Modules
 
@@ -279,8 +283,9 @@ try {
 }
 ```
 
-For `IsolateQjs`, wrap inline Dart callbacks with `IsolateFunction` before
-passing them to JavaScript.
+For `IsolateQjs`, top-level functions and static methods can be passed
+directly, and JavaScript can call them synchronously. Wrap inline Dart
+callbacks with `IsolateFunction` only when needed; that path is asynchronous.
 
 ```dart
 final engine = IsolateQjs();
@@ -290,13 +295,33 @@ try {
 		'(key, value) => { globalThis[key] = value; }',
 	);
 
-	await setGlobal.invoke([
-		'add',
-		IsolateFunction((int a, int b) => a + b),
-	]);
+	await setGlobal.invoke(['add', add]);
 	setGlobal.free();
 
-	print(await engine.evaluate<int>('add(2, 3)')); // 5
+	print(await engine.evaluate<int>('add(2, 3)')); // 5, synchronous JS call
+} finally {
+	await engine.close();
+}
+
+String add(int a, int b) => a + b;
+```
+
+Inline callbacks need `IsolateFunction`, and JavaScript must `await` them:
+
+```dart
+final engine = IsolateQjs();
+
+try {
+	await engine.setGlobal(
+		'add',
+		IsolateFunction((int a, int b) => a + b),
+	);
+
+	final result = await engine.evaluate<int>(r'''
+(async () => await add(2, 3))()
+''');
+
+	print(result); // 5
 } finally {
 	await engine.close();
 }

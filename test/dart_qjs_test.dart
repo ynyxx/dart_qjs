@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:dart_qjs/dart_qjs.dart';
 import 'package:test/test.dart';
 
+int topAdd(int a, int b) => a + b;
+
 void main() {
   group('FlutterQjs', () {
     test('provides fetch, Request, Response and Headers extensions', () {
@@ -527,6 +529,44 @@ console.warn('from isolate', 9);
 ''');
 
       expect(result, {'answer': 42, 'enabled': true});
+    });
+
+    test('IsolateFunction', () async {
+      final qjs = IsolateQjs();
+      addTearDown(qjs.close);
+
+      await qjs.setGlobal('add', IsolateFunction((int a, b) => a + b));
+
+      final result = await qjs.evaluate(r'''
+        (async () => {
+        a = 0;
+        for (let i = 0; i < 10; i++) {
+          a = await add(a, 1);
+        }
+        return a;
+        })()
+      ''');
+
+      expect(result, 10);
+    });
+
+    test('setGlobal accepts top-level functions directly', () async {
+      final qjs = IsolateQjs();
+      addTearDown(qjs.close);
+
+      await qjs.setGlobal('topAdd', topAdd);
+
+      final result = await qjs.evaluate(r'''
+        (() => {
+          a = 0;
+          for (let i = 0; i < 10; i++) {
+            a = topAdd(a, 1);
+          }
+          return a;
+        })()
+      ''');
+
+      expect(result, 10);
     });
   });
 }
